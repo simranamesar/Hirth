@@ -1,15 +1,18 @@
 .PHONY: setup db run test fmt clean
 
 setup:
+	@if command -v apt-get >/dev/null 2>&1; then \
+	  echo "Installing system packages..."; \
+	  sudo apt-get update -qq && sudo apt-get install -y -qq \
+	    tesseract-ocr tesseract-ocr-deu \
+	    poppler-utils \
+	    libreoffice-headless \
+	    antiword; \
+	fi
 	python -m venv .venv
 	. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
 	@echo ""
-	@echo "System deps still needed (not pip):"
-	@echo "  - tesseract-ocr + tesseract-ocr-deu   (OCR)"
-	@echo "  - poppler-utils                        (pdf2image)"
-	@echo "  - libreoffice OR antiword              (legacy .doc)"
-	@echo ""
-	@echo "Then: cp .env.example .env  and fill it in."
+	@echo "Done. Next: cp .env.example .env and fill it in."
 
 db:
 	docker compose up -d

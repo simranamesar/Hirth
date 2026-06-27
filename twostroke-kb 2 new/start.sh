@@ -5,6 +5,27 @@ cd "$(dirname "$0")"
 
 echo "=== TwoStroke-KB Startup ==="
 
+# ── System dependencies (apt) ─────────────────────────────────────────────────
+# Install any missing packages silently so parsers work out of the box.
+_apt_install() {
+  local missing=()
+  for pkg in "$@"; do
+    dpkg -s "$pkg" &>/dev/null || missing+=("$pkg")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "Installing system packages: ${missing[*]}"
+    sudo apt-get update -qq && sudo apt-get install -y -qq "${missing[@]}"
+  fi
+}
+
+if command -v apt-get &>/dev/null; then
+  _apt_install \
+    tesseract-ocr tesseract-ocr-deu \
+    poppler-utils \
+    libreoffice-headless \
+    antiword
+fi
+
 # Ensure .env exists
 if [ ! -f .env ]; then
     cp .env.example .env
