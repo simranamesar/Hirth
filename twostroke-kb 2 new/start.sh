@@ -19,11 +19,13 @@ _apt_install() {
 }
 
 if command -v apt-get &>/dev/null; then
-  _apt_install \
-    tesseract-ocr tesseract-ocr-deu \
-    poppler-utils \
-    libreoffice-headless \
-    antiword
+  # Install individually so one failure doesn't block the rest
+  sudo apt-get update -qq 2>/dev/null || true
+  for pkg in tesseract-ocr tesseract-ocr-deu poppler-utils antiword libreoffice; do
+    dpkg -s "$pkg" &>/dev/null && continue
+    echo "Installing $pkg..."
+    sudo apt-get install -y -qq "$pkg" 2>/dev/null || echo "  (skipped $pkg — not available in this repo)"
+  done
 fi
 
 # Ensure .env exists

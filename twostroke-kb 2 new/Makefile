@@ -3,11 +3,10 @@
 setup:
 	@if command -v apt-get >/dev/null 2>&1; then \
 	  echo "Installing system packages..."; \
-	  sudo apt-get update -qq && sudo apt-get install -y -qq \
-	    tesseract-ocr tesseract-ocr-deu \
-	    poppler-utils \
-	    libreoffice-headless \
-	    antiword; \
+	  sudo apt-get update -qq 2>/dev/null || true; \
+	  for pkg in tesseract-ocr tesseract-ocr-deu poppler-utils antiword libreoffice; do \
+	    dpkg -s "$$pkg" >/dev/null 2>&1 || sudo apt-get install -y -qq "$$pkg" 2>/dev/null || echo "  (skipped $$pkg)"; \
+	  done; \
 	fi
 	python -m venv .venv
 	. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
