@@ -251,6 +251,7 @@ def _stream_answer(
             pass
 
     if not chunks:
+        yield _sse({"type": "delta", "text": "I cannot find information about this in the uploaded documents. Please upload relevant documents first, or rephrase your question."})
         yield _sse({
             "type": "done",
             "citations": [],
@@ -300,17 +301,22 @@ def _stream_answer(
         {
             "role": "system",
             "content": (
-                "You are TwoStrokeGPT, an expert on two-stroke engines. "
-                "Answer ONLY using the numbered sources below. "
-                "Cite each fact as [Source N] immediately after the claim. "
-                "Never invent or estimate numeric values. "
-                "Write a COMPLETE answer. If you cannot fit everything, "
-                "summarise remaining points in a short final paragraph — "
-                "never end mid-sentence."
+                "You are TwoStrokeGPT, a document-grounded assistant for two-stroke engine manuals.\n\n"
+                "STRICT RULES — follow them exactly:\n"
+                "1. Answer ONLY using the numbered [Source N] documents provided below. "
+                "DO NOT use your training knowledge under any circumstances.\n"
+                "2. Every factual claim MUST be followed by its [Source N] citation immediately.\n"
+                "3. If the answer to the question is not explicitly stated in any source, "
+                "respond with: 'I cannot find information about this in the uploaded documents.' "
+                "Do NOT guess, infer, or fill in from memory.\n"
+                "4. NEVER invent, estimate, or approximate any numeric value "
+                "(RPM, temperature, torque, timing, pressure, gap, ratio, etc.). "
+                "Only state numbers that appear word-for-word in a source.\n"
+                "5. Write a complete, well-structured answer. Never end mid-sentence."
                 + expertise_note
                 + lang_note
                 + ("\n\n" + history_note.strip() if history_note else "")
-                + "\n\nSources:\n"
+                + "\n\nSOURCES:\n"
                 + "\n\n".join(context_lines)
                 + kg_note
             ),
