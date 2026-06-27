@@ -201,6 +201,15 @@
     .chunk-meta{font-size:11px;color:var(--tx3);margin-top:3px;font-family:var(--mono)}
     #chunkDetail{margin-top:12px;display:none}
     #chunkDetail pre{background:var(--ins);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;color:var(--tx2);font-family:var(--mono)}
+    .chunk-table-wrap{overflow-x:auto;max-height:360px;border:1px solid var(--line);border-radius:10px;background:var(--ins)}
+    .chunk-table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:var(--mono)}
+    .chunk-table th{background:var(--panel2);color:var(--tx);font-weight:600;padding:9px 12px;text-align:left;border-bottom:2px solid var(--line2);white-space:nowrap;position:sticky;top:0}
+    .chunk-table td{padding:7px 12px;border-bottom:1px solid var(--line);color:var(--tx2);vertical-align:top}
+    .chunk-table tr:last-child td{border-bottom:none}
+    .chunk-table tr:hover td{background:#ffffff05}
+    .chunk-table td:first-child{color:var(--tx);font-weight:500}
+    .chunk-table-title{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grn);margin-bottom:8px}
+    .chunk-table-units{font-family:var(--mono);font-size:11px;color:var(--tx3);margin-top:8px;padding:6px 10px;background:var(--ins);border-radius:6px;border:1px solid var(--line)}
 
     /* ── Knowledge graph ── */
     .graph-tools{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
@@ -921,13 +930,69 @@
       const r = await fetch(`/chunks/${id}`);
       const j = await r.json();
       if (j.error) { document.getElementById("chunkContent").textContent = j.error; return; }
-      document.getElementById("chunkContent").textContent = j.content;
+
+      const isTable = (j.metadata||{}).chunk_type === "table" || _looksLikeTable(j.content);
+      const contentEl = document.getElementById("chunkContent");
+      if (isTable) {
+        contentEl.outerHTML = `<div id="chunkContent">${_renderTableChunk(j.content)}</div>`;
+      } else {
+        const el = document.getElementById("chunkContent");
+        el.outerHTML = `<pre id="chunkContent">${_esc(j.content)}</pre>`;
+      }
+
       const refs = (j.source_refs||[]).map(r => r.filename||r.source||JSON.stringify(r)).join(", ");
       document.getElementById("chunkMeta").textContent =
         `id:${j.id} · doc:${j.doc_id} · type:${(j.metadata||{}).chunk_type||"?"} · page:${(j.metadata||{}).page||"?"} · sources:${refs||"none"}`;
     } catch (e) {
       document.getElementById("chunkContent").textContent = "Error: " + e.message;
     }
+  }
+
+  function _looksLikeTable(content) {
+    const lines = (content || "").split("\n").filter(l => l.trim());
+    const pipeLines = lines.filter(l => l.includes(" | "));
+    return pipeLines.length >= 2;
+  }
+
+  function _renderTableChunk(content) {
+    const lines = content.split("\n").map(l => l.trim()).filter(Boolean);
+    let title = "";
+    let unitsLine = "";
+    const dataLines = [];
+
+    for (const line of lines) {
+      if (line.startsWith("[Table:") && line.endsWith("]")) {
+        title = line.slice(7, -1).trim();
+      } else if (line.startsWith("Units:")) {
+        unitsLine = line.slice(6).trim();
+      } else {
+        dataLines.push(line);
+      }
+    }
+
+    if (!dataLines.length) return `<pre id="chunkContent">${_esc(content)}</pre>`;
+
+    const rows = dataLines.map(l => l.split(" | ").map(c => c.trim()));
+    const header = rows[0];
+    const body = rows.slice(1);
+
+    const titleHtml = title ? `<div class="chunk-table-title">⊞ ${_esc(title)}</div>` : "";
+    const unitsHtml = unitsLine ? `<div class="chunk-table-units">Units: ${_esc(unitsLine)}</div>` : "";
+
+    const thCells = header.map(h => `<th>${_esc(h)}</th>`).join("");
+    const trRows = body.map(row => {
+      const cells = row.map((c, i) => `<td>${_esc(c)}</td>`).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+
+    return `${titleHtml}
+      <div class="chunk-table-wrap">
+        <table class="chunk-table">
+          <thead><tr>${thCells}</tr></thead>
+          <tbody>${trRows}</tbody>
+        </table>
+      </div>
+      ${unitsHtml}`;
   }
 
   // ── Knowledge graph ───────────────────────────────────────────────────
