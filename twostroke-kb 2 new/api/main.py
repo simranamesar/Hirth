@@ -857,6 +857,68 @@ def graph_quality() -> JSONResponse:
         })
 
 
+@app.get("/search")
+def semantic_search(q: str, limit: int = 10) -> JSONResponse:
+    """Hybrid BM25 + dense semantic search over indexed chunks."""
+    import json as _j
+    from config import get_connection
+
+    if not q or not q.strip():
+        return JSONResponse({"results": [], "error": "empty query"})
+
+    try:
+        from agent.retriever_hybrid import HybridRetriever
+        retriever = HybridRetriever()
+        hits = retriever.search(q.strip(), top_k=limit)
+        results = []
+        for h in hits:
+            results.append({
+                "id":       h.get("id"),
+                "doc_id":   h.get("doc_id", ""),
+                "score":    round(float(h.get("score", 0)), 4),
+                "snippet":  (h.get("content") or h.get("snippet") or "")[:300],
+                "metadata": h.get("metadata", {}),
+                "filename": h.get("filename") or (h.get("source_refs") or [{}])[0].get("filename", ""),
+            })
+        return JSONResponse({"results": results})
+    except Exception as exc:
+        # Fallback: plain SQL full-text search
+        try:
+            conn = get_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT id, doc_id, content, metadata, source_refs,
+                           ts_rank_cd(to_tsvector('simple', content),
+                                      plainto_tsquery('simple', %s)) AS rank
+                    FROM chunks
+                    WHERE to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
+                    ORDER BY rank DESC LIMIT %s
+                    """,
+                    (q, q, limit),
+                )
+                rows = cur.fetchall()
+            finally:
+                conn.close()
+            results = []
+            for r in rows:
+                meta = r[3] if isinstance(r[3], dict) else _j.loads(r[3] or "{}")
+                refs = r[4] if isinstance(r[4], list) else _j.loads(r[4] or "[]")
+                filename = (refs[0].get("filename") or refs[0].get("source") or "") if refs else ""
+                results.append({
+                    "id":       r[0],
+                    "doc_id":   r[1],
+                    "score":    round(float(r[5]), 4),
+                    "snippet":  r[2][:300],
+                    "metadata": meta,
+                    "filename": filename,
+                })
+            return JSONResponse({"results": results, "mode": "fulltext_fallback"})
+        except Exception as exc2:
+            return JSONResponse({"results": [], "error": str(exc2)})
+
+
 if __name__ == "__main__":
     import uvicorn
 

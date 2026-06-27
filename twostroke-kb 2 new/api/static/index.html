@@ -307,6 +307,10 @@
         <span class="nidx">05</span>
         <span class="nlbl">Entities</span>
       </div>
+      <div class="navi" onclick="switchTab('search')" id="nav-search">
+        <span class="nidx">06</span>
+        <span class="nlbl">Semantic Search</span>
+      </div>
     </nav>
     <div class="railftr">
       <div class="kbstat"><span>Documents</span><b id="docCountLabel">—</b></div>
@@ -517,6 +521,26 @@
         </div>
       </div>
 
+      <!-- ── Semantic Search tab ── -->
+      <div class="tab-panel" id="tab-search">
+        <div class="pad">
+          <div class="card">
+            <div class="sect">Semantic Search</div>
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <input type="text" id="searchQuery" placeholder="e.g. Zündkerze Drehzahl, spark plug gap, fuel mixture ratio…" style="flex:1"
+                onkeydown="if(event.key==='Enter')runSearch()"/>
+              <select id="searchLimit" class="graph-select">
+                <option value="10">Top 10</option>
+                <option value="20">Top 20</option>
+                <option value="5">Top 5</option>
+              </select>
+              <button class="btn pri" onclick="runSearch()">Search</button>
+            </div>
+            <div id="searchResults"><span class="muted">Enter a query above to search the knowledge base.</span></div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- .content -->
   </div><!-- .main -->
 </div><!-- .app -->
@@ -537,7 +561,7 @@
   });
 
   // ── Tab switching ──────────────────────────────────────────────────────
-  const TAB_LABELS = {ask:"Chat",upload:"Upload & Ingest",chunks:"Indexed Chunks",graph:"Knowledge Graph",entities:"Entities"};
+  const TAB_LABELS = {ask:"Chat",upload:"Upload & Ingest",chunks:"Indexed Chunks",graph:"Knowledge Graph",entities:"Entities",search:"Semantic Search"};
   function switchTab(name) {
     document.querySelectorAll(".navi").forEach(n => n.classList.remove("on"));
     const nav = document.getElementById("nav-" + name);
@@ -1299,6 +1323,44 @@
         <div><div class="lbl" style="margin-bottom:6px">Extraction methods</div><div class="kg-breakdown">${methodRows||'<span class="muted">—</span>'}</div></div>
       </div>
       ${j.noisy_unknown_nodes&&j.noisy_unknown_nodes.length?`<div style="margin-top:12px"><div class="lbl" style="margin-bottom:6px">⚠ Unknown/noisy nodes</div><div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">${j.noisy_unknown_nodes.join(', ')}</div></div>`:''}`;
+  }
+
+  // ── Semantic Search ───────────────────────────────────────────────────
+  async function runSearch() {
+    const q = document.getElementById("searchQuery").value.trim();
+    const limit = document.getElementById("searchLimit").value;
+    const el = document.getElementById("searchResults");
+    if (!q) return;
+    el.innerHTML = '<span class="spinner"></span> Searching…';
+    try {
+      const r = await fetch(`/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+      const j = await r.json();
+      if (j.error && !j.results.length) {
+        el.innerHTML = `<span class="muted">Error: ${j.error}</span>`; return;
+      }
+      if (!j.results.length) {
+        el.innerHTML = '<span class="muted">No results found. Try a different query or upload more documents.</span>'; return;
+      }
+      const mode = j.mode === "fulltext_fallback" ? ' <span style="color:var(--amb);font-family:var(--mono);font-size:10px">(full-text fallback)</span>' : '';
+      el.innerHTML = `<div class="lbl" style="margin-bottom:10px">${j.results.length} results${mode}</div>` +
+        j.results.map((r, i) => {
+          const ext = (r.filename || r.doc_id || "").split(".").pop().toUpperCase() || "DOC";
+          const fmtCls = _fmtClass(r.filename || r.doc_id || "");
+          const score = (r.score * 100).toFixed(1);
+          const page = r.metadata?.page ? ` · p.${r.metadata.page}` : "";
+          return `<div class="srccard" onclick="viewChunk(${r.id})" style="margin-bottom:8px">
+            <div class="srccard-top">
+              <span class="tag ${fmtCls}">${ext}</span>
+              <span class="srccard-name">${r.filename || r.doc_id || "unknown"}</span>
+              <span class="srccard-page">${page}</span>
+              <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--grn)">${score}%</span>
+            </div>
+            <div class="srccard-snippet">${r.snippet}</div>
+          </div>`;
+        }).join("");
+    } catch (e) {
+      el.innerHTML = `<span class="muted">Error: ${e.message}</span>`;
+    }
   }
 
   // Initial data refresh
